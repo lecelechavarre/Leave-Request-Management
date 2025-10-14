@@ -1,0 +1,17 @@
+[
+  {
+    "username": "admin",
+    "password": "4c0b3b0412a...",
+    "role": "admin"
+  },
+  {
+    "username": "employee",
+    "password": "5e884898da...",
+    "role": "employee"
+  },
+  {
+    "username": "admin1",
+    "password": "25f43b1486ad95a1398e3eeb3d83bc4010015fcc9bedb35b432e00298d5021f7",
+    "role": "admin"
+  }
+]
