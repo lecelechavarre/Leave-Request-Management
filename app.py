@@ -22,6 +22,5 @@ class AppController:
         if self.dashboard:
             self.dashboard.close()
         self.user = None
-        # create a fresh login window
         self.login_window = LoginWindow(self)
         self.login_window.show()
