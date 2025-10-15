@@ -4,7 +4,6 @@ import sys, os
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    # load QSS
     qss_path = os.path.join(os.path.dirname(__file__), 'resources', 'styles.qss')
     if os.path.exists(qss_path):
         with open(qss_path, 'r', encoding='utf-8') as f:
