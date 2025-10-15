@@ -2,7 +2,7 @@ import json, os, hashlib, secrets, binascii
 
 def load_json(path):
     if not os.path.exists(path):
-        return []
+        return None
     with open(path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
@@ -27,3 +27,15 @@ def verify_password(password, stored):
         return check == stored
     except Exception:
         return False
+
+# Preferences helpers
+PREFS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'preferences.json')
+
+def load_prefs():
+    p = load_json(PREFS_FILE)
+    if p is None:
+        return {}
+    return p
+
+def save_prefs(prefs):
+    save_json(PREFS_FILE, prefs)
