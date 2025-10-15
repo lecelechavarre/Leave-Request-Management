@@ -1,51 +1,62 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox, QHBoxLayout, QSpacerItem, QSizePolicy
+from PyQt6.QtGui import QIcon
+import os
+from controllers.auth_controller import AuthController
 from views.register_window import RegisterWindow
+
+def icon_path(name):
+    return os.path.join(os.path.dirname(__file__), '..', 'resources', 'icons', name)
 
 class LoginWindow(QWidget):
     def __init__(self, app_controller):
         super().__init__()
-        self.controller = app_controller
-        self.setWindowTitle("Login - Leave Manager")
-        self.setGeometry(500, 300, 300, 200)
+        self.app_controller = app_controller
+        self.setWindowTitle('Leave Manager - Login')
+        self.setFixedSize(380, 250)
+        self.setup_ui()
 
+    def setup_ui(self):
         layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        title = QLabel('Leave Request Manager')
+        title.setProperty('heading', True)
+        layout.addWidget(title)
+
+        layout.addWidget(QLabel('Username'))
         self.username = QLineEdit()
-        self.username.setPlaceholderText("Username")
-        self.password = QLineEdit()
-        self.password.setPlaceholderText("Password")
-        self.password.setEchoMode(QLineEdit.EchoMode.Password)
-
-        self.login_btn = QPushButton("Login")
-        self.create_btn = QPushButton("Create Account")
-
-        layout.addWidget(QLabel("<h3>Leave Request Manager</h3>"))
         layout.addWidget(self.username)
-        layout.addWidget(self.password)
-        layout.addWidget(self.login_btn)
-        layout.addWidget(self.create_btn)
 
+        layout.addWidget(QLabel('Password'))
+        self.password = QLineEdit()
+        self.password.setEchoMode(QLineEdit.EchoMode.Password)
+        layout.addWidget(self.password)
+
+        btn_layout = QHBoxLayout()
+        self.login_btn = QPushButton('Login')
+        self.login_btn.setIcon(QIcon(icon_path('user.svg')))
+        self.login_btn.clicked.connect(self.on_login)
+        btn_layout.addWidget(self.login_btn)
+
+        spacer = QSpacerItem(20, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        btn_layout.addItem(spacer)
+
+        self.register_btn = QPushButton('Create Account')
+        self.register_btn.setProperty('class', 'secondary')
+        self.register_btn.clicked.connect(self.on_register)
+        btn_layout.addWidget(self.register_btn)
+
+        layout.addLayout(btn_layout)
         self.setLayout(layout)
 
-        self.login_btn.clicked.connect(self.handle_login)
-        self.create_btn.clicked.connect(self.open_register)
-
-    def handle_login(self):
-        uname = self.username.text().strip()
-        pwd = self.password.text().strip()
-        if not uname or not pwd:
-            QMessageBox.warning(self, "Error", "Please enter username and password.")
-            return
-
-        user = self.controller.user_model.verify_user(uname, pwd)
+    def on_login(self):
+        u = self.username.text().strip()
+        p = self.password.text().strip()
+        user = AuthController.login(u, p)
         if user:
-            self.controller.login_success(user)
-            self.close()
+            self.app_controller.login_success(user)
         else:
-            QMessageBox.critical(self, "Login Failed", "Invalid credentials.")
+            QMessageBox.critical(self, 'Error', 'Invalid credentials')
 
-    def open_register(self):
-        reg = RegisterWindow(self.controller)
+    def on_register(self):
+        reg = RegisterWindow(self)
         reg.exec()
