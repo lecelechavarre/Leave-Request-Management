@@ -4,6 +4,9 @@ import sys, os
 from logger import logger, exception_hook
 sys.excepthook = exception_hook
 if __name__ == '__main__':
+    # initialize DB and default users
+    from models.init_db import init as init_db
+    init_db()
     app = QApplication(sys.argv)
     qss = os.path.join(os.path.dirname(__file__), 'resources', 'styles.qss')
     if os.path.exists(qss):
