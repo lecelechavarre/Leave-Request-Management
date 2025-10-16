@@ -1,12 +1,3 @@
-from models.user_model import UserModel
-
-class AuthController:
-    @staticmethod
-    def login(username, password):
-        if UserModel.verify(username, password):
-            return UserModel.get_user(username)
-        return None
-
-    @staticmethod
-    def register(username, password, role='employee'):
-        return UserModel.add_user(username, password, role)
+from models import user_model as UM
+def login(u,p): return UM.get_user(u) if UM.verify(u,p) else None
+def register(u,p,role='employee'): return UM.add_user(u,p,role)
