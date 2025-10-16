@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QComboBox, QMessageBox, QHBoxLayout, QSpacerItem, QSizePolicy
 from controllers import auth_controller as AC
 class RegisterWindow(QDialog):
-    def __init__(self,parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent); self.setWindowTitle('Create Account'); self.setFixedSize(380,320); self.setup_ui()
     def setup_ui(self):
         layout = QVBoxLayout(); title = QLabel('Create account'); title.setProperty('heading', True); layout.addWidget(title)
