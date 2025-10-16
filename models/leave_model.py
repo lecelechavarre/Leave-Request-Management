@@ -1,21 +1,29 @@
-from utils import load_json, save_json
-import os, uuid
-LEAVES_FILE = os.path.join(os.path.dirname(__file__),'..','data','leaves.json')
-def _ensure():
-    os.makedirs(os.path.dirname(LEAVES_FILE),exist_ok=True)
-    if not os.path.exists(LEAVES_FILE): save_json(LEAVES_FILE,[])
-def list_all(): _ensure(); return load_json(LEAVES_FILE) or []
+from models.db import get_conn
+import uuid
+def list_all():
+    conn = get_conn(); cur = conn.cursor(); cur.execute('SELECT * FROM leaves'); rows = cur.fetchall(); conn.close()
+    return [dict(r) for r in rows]
 def list_for_user(username=None):
-    items = list_all()
-    if username: return [i for i in items if i.get('username')==username]
-    return items
+    conn = get_conn(); cur = conn.cursor()
+    if username:
+        cur.execute('SELECT * FROM leaves WHERE username=?', (username,))
+    else:
+        cur.execute('SELECT * FROM leaves')
+    rows = cur.fetchall(); conn.close()
+    return [dict(r) for r in rows]
 def create(record):
-    _ensure(); items=list_all(); record['id']=str(uuid.uuid4())[:8]; items.append(record); save_json(LEAVES_FILE, items); return record
+    conn = get_conn(); cur = conn.cursor()
+    lid = str(uuid.uuid4())[:8]
+    cur.execute('INSERT INTO leaves(id,username,type,start_date,end_date,status,reason) VALUES (?,?,?,?,?,?,?)',
+                (lid, record.get('username'), record.get('type'), record.get('start_date'), record.get('end_date'), record.get('status'), record.get('reason')))
+    conn.commit(); conn.close(); record['id']=lid; return record
 def update(record_id, updates):
-    _ensure(); items=list_all()
-    for i,it in enumerate(items):
-        if it.get('id')==record_id:
-            items[i].update(updates); save_json(LEAVES_FILE, items); return items[i]
-    return None
+    conn = get_conn(); cur = conn.cursor()
+    keys=[]; vals=[]
+    for k,v in updates.items(): keys.append(f"{k}=?"); vals.append(v)
+    vals.append(record_id)
+    cur.execute(f"UPDATE leaves SET {', '.join(keys)} WHERE id=?", vals)
+    conn.commit(); conn.close()
+    return True
 def delete(record_id):
-    _ensure(); items=list_all(); new=[it for it in items if it.get('id')!=record_id]; save_json(LEAVES_FILE,new); return True
+    conn = get_conn(); cur = conn.cursor(); cur.execute('DELETE FROM leaves WHERE id=?', (record_id,)); conn.commit(); conn.close(); return True
