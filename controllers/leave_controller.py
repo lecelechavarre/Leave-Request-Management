@@ -1,32 +1,19 @@
-from models.leave_model import LeaveModel
-
-class LeaveController:
-    @staticmethod
-    def list(user):
-        if user.get('role') == 'admin':
-            return LeaveModel.list_for_user(None)
-        return LeaveModel.list_for_user(user['username'])
-
-    @staticmethod
-    def create(user, payload):
-        payload['username'] = user['username']
-        payload['status'] = 'Pending'
-        return LeaveModel.create(payload)
-
-    @staticmethod
-    def update(user, leave_id, updates):
-        leaves = LeaveModel.list_for_user(None)
-        for l in leaves:
-            if l['id'] == leave_id:
-                if user['role'] == 'admin' or l['username'] == user['username']:
-                    return LeaveModel.update(leave_id, updates)
-        return None
-
-    @staticmethod
-    def delete(user, leave_id):
-        leaves = LeaveModel.list_for_user(None)
-        for l in leaves:
-            if l['id'] == leave_id:
-                if user['role'] == 'admin' or l['username'] == user['username']:
-                    return LeaveModel.delete(leave_id)
-        return None
+from models import leave_model as LM
+def list_for(user):
+    if user.get('role')=='admin': return LM.list_for_user(None)
+    return LM.list_for_user(user.get('username'))
+def create(user,payload): payload['username']=user['username']; payload['status']='Pending'; return LM.create(payload)
+def update(user,leave_id,updates):
+    leaves = LM.list_for_user(None)
+    for l in leaves:
+        if l.get('id')==leave_id:
+            if user.get('role')=='admin' or l.get('username')==user.get('username'):
+                return LM.update(leave_id, updates)
+    return None
+def delete(user,leave_id):
+    leaves = LM.list_for_user(None)
+    for l in leaves:
+        if l.get('id')==leave_id:
+            if user.get('role')=='admin' or l.get('username')==user.get('username'):
+                return LM.delete(leave_id)
+    return None
