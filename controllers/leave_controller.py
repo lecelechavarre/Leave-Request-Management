@@ -2,7 +2,8 @@ from models import leave_model as LM
 def list_for(user):
     if user.get('role')=='admin': return LM.list_for_user(None)
     return LM.list_for_user(user.get('username'))
-def create(user,payload): payload['username']=user['username']; payload['status']='Pending'; return LM.create(payload)
+def create(user,payload):
+    payload['username']=user['username']; payload['status']='Pending'; return LM.create(payload)
 def update(user,leave_id,updates):
     leaves = LM.list_for_user(None)
     for l in leaves:
