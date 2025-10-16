@@ -1,313 +1,304 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QHBoxLayout, QMessageBox, QSpacerItem, QSizePolicy, QLineEdit, QComboBox, QDateEdit, QCheckBox
-from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QTreeView, QHBoxLayout, QMessageBox, QSpacerItem, QSizePolicy, QLineEdit, QComboBox, QDateEdit, QCheckBox, QToolButton, QFileDialog
+from PyQt6.QtGui import QIcon, QStandardItemModel, QStandardItem
 from PyQt6.QtCore import Qt, QDate
-import os, datetime
-from controllers.leave_controller import LeaveController
+from controllers import leave_controller as LC
 from views.leave_form import LeaveForm
 from utils import load_prefs, save_prefs
+import datetime, csv, os
 
-def icon_path(name):
-    return os.path.join(os.path.dirname(__file__), '..', 'resources', 'icons', name)
+def icon_path(n): return os.path.join(os.path.dirname(__file__),'..','resources','icons',n)
 
 class DashboardWindow(QWidget):
-    COLUMNS = ['ID', 'Username', 'Type', 'Start Date', 'End Date', 'Status', 'Reason']
+    HEADERS = ['ID','Username','Type','Start Date','End Date','Status','Reason']
 
     def __init__(self, app_controller, user):
         super().__init__()
         self.app_controller = app_controller
         self.user = user
         self.prefs = load_prefs() or {}
+        self.expanded_states = self.prefs.get('expanded', {})
         self.setWindowTitle(f'Dashboard - {user["username"]} ({user.get("role")})')
-        self.setFixedSize(980, 620)
+        self.setFixedSize(1100,700)
         self.setup_ui()
         self.load_prefs()
+        self.build_model()
         self.load_leaves()
 
     def setup_ui(self):
         self.layout = QVBoxLayout()
-        header_layout = QHBoxLayout()
+        header = QHBoxLayout()
+        title = QLabel(f'Welcome, {self.user["username"]}'); title.setProperty('heading', True); header.addWidget(title)
+        header.addItem(QSpacerItem(20,20,QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Minimum))
+        self.refresh_btn = QPushButton('Refresh'); self.refresh_btn.clicked.connect(self.load_leaves); header.addWidget(self.refresh_btn)
+        self.logout_btn = QPushButton('Logout'); self.logout_btn.clicked.connect(self.on_logout); header.addWidget(self.logout_btn)
+        self.layout.addLayout(header)
 
-        title = QLabel(f'Welcome, {self.user["username"]}')
-        title.setProperty('heading', True)
-        header_layout.addWidget(title)
+        controls = QHBoxLayout()
+        self.search = QLineEdit(); self.search.setPlaceholderText('Search by username/type/reason/status...'); self.search.textChanged.connect(self.on_filters_changed); controls.addWidget(self.search)
+        self.group_mode = QComboBox(); self.group_mode.addItems(['Group by Status','Group by Username','No Grouping']); self.group_mode.currentIndexChanged.connect(self.on_group_changed); controls.addWidget(self.group_mode)
+        self.status_filter = QComboBox(); self.status_filter.addItems(['All','Pending','Approved','Rejected']); self.status_filter.currentIndexChanged.connect(self.on_filters_changed); controls.addWidget(self.status_filter)
+        self.type_filter = QComboBox(); self.type_filter.addItems(['All','Vacation','Sick','Others']); self.type_filter.currentIndexChanged.connect(self.on_filters_changed); controls.addWidget(self.type_filter)
+        self.use_date = QCheckBox('Use date range'); self.use_date.stateChanged.connect(self.on_filters_changed); controls.addWidget(self.use_date)
+        self.start_date = QDateEdit(); self.start_date.setCalendarPopup(True); self.start_date.setDate(QDate.currentDate().addMonths(-1)); self.start_date.dateChanged.connect(self.on_filters_changed); controls.addWidget(self.start_date)
+        self.end_date = QDateEdit(); self.end_date.setCalendarPopup(True); self.end_date.setDate(QDate.currentDate()); self.end_date.dateChanged.connect(self.on_filters_changed); controls.addWidget(self.end_date)
+        self.copy_btn = QToolButton(); self.copy_btn.setToolTip('Copy selected rows'); self.copy_btn.clicked.connect(self.copy_selected); controls.addWidget(self.copy_btn)
+        self.export_btn = QToolButton(); self.export_btn.setToolTip('Export ALL rows to CSV'); self.export_btn.clicked.connect(self.export_all); controls.addWidget(self.export_btn)
+        self.layout.addLayout(controls)
 
-        header_spacer = QSpacerItem(20, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        header_layout.addItem(header_spacer)
+        self.summary = QLabel(''); self.summary.setObjectName('summary'); self.layout.addWidget(self.summary)
 
-        self.refresh_btn = QPushButton('Refresh')
-        self.refresh_btn.setIcon(QIcon(icon_path('refresh.svg')))
-        self.refresh_btn.clicked.connect(self.load_leaves)
-        header_layout.addWidget(self.refresh_btn)
+        self.view = QTreeView(); self.view.setRootIsDecorated(False); self.view.setAlternatingRowColors(True)
+        self.view.setEditTriggers(QTreeView.EditTrigger.DoubleClicked | QTreeView.EditTrigger.SelectedClicked)
+        self.view.setSelectionBehavior(QTreeView.SelectionBehavior.SelectRows)
+        self.view.expanded.connect(self.on_expanded); self.view.collapsed.connect(self.on_collapsed)
+        self.layout.addWidget(self.view)
 
-        self.logout_btn = QPushButton('Logout')
-        self.logout_btn.setIcon(QIcon(icon_path('logout.svg')))
-        self.logout_btn.clicked.connect(self.on_logout)
-        header_layout.addWidget(self.logout_btn)
-
-        self.layout.addLayout(header_layout)
-
-        # Search / filters / sort row
-        controls_layout = QHBoxLayout()
-        self.search = QLineEdit()
-        self.search.setPlaceholderText('Search by username, type, reason, status...')
-        self.search.textChanged.connect(self.on_filters_changed)
-        controls_layout.addWidget(self.search)
-
-        self.status_filter = QComboBox()
-        self.status_filter.addItems(['All', 'Pending', 'Approved', 'Rejected'])
-        self.status_filter.currentIndexChanged.connect(self.on_filters_changed)
-        controls_layout.addWidget(self.status_filter)
-
-        self.type_filter = QComboBox()
-        self.type_filter.addItems(['All', 'Vacation', 'Sick', 'Others'])
-        self.type_filter.currentIndexChanged.connect(self.on_filters_changed)
-        controls_layout.addWidget(self.type_filter)
-
-        # Date range
-        self.use_date_filter = QCheckBox('Use date range')
-        self.use_date_filter.stateChanged.connect(self.on_filters_changed)
-        controls_layout.addWidget(self.use_date_filter)
-
-        self.start_filter = QDateEdit()
-        self.start_filter.setCalendarPopup(True)
-        self.start_filter.setDate(QDate.currentDate().addMonths(-1))
-        self.start_filter.dateChanged.connect(self.on_filters_changed)
-        controls_layout.addWidget(self.start_filter)
-
-        self.end_filter = QDateEdit()
-        self.end_filter.setCalendarPopup(True)
-        self.end_filter.setDate(QDate.currentDate())
-        self.end_filter.dateChanged.connect(self.on_filters_changed)
-        controls_layout.addWidget(self.end_filter)
-
-        self.sort_by = QComboBox()
-        self.sort_by.addItems(['Start date ↑', 'Start date ↓', 'End date ↑', 'End date ↓', 'Username A-Z', 'Username Z-A', 'Status A-Z', 'Status Z-A'])
-        self.sort_by.currentIndexChanged.connect(self.on_filters_changed)
-        controls_layout.addWidget(self.sort_by)
-
-        self.layout.addLayout(controls_layout)
-
-        # Table
-        self.table = QTableWidget(0, len(self.COLUMNS))
-        self.table.setHorizontalHeaderLabels(self.COLUMNS)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setSortingEnabled(True)
-        self.layout.addWidget(self.table)
-
-        # Actions
-        action_layout = QHBoxLayout()
-        self.add_btn = QPushButton('Apply Leave')
-        self.add_btn.setIcon(QIcon(icon_path('add.svg')))
-        self.add_btn.clicked.connect(self.open_add)
-        action_layout.addWidget(self.add_btn)
-
-        action_layout.addItem(QSpacerItem(20, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
-
-        self.edit_btn = QPushButton('Edit')
-        self.edit_btn.setIcon(QIcon(icon_path('edit.svg')))
-        self.edit_btn.clicked.connect(self.edit_selected)
-        action_layout.addWidget(self.edit_btn)
-
-        self.delete_btn = QPushButton('Delete')
-        self.delete_btn.setIcon(QIcon(icon_path('delete.svg')))
-        self.delete_btn.clicked.connect(self.delete_selected)
-        action_layout.addWidget(self.delete_btn)
-
-        self.approve_btn = QPushButton('Approve')
-        self.approve_btn.setIcon(QIcon(icon_path('approve.svg')))
-        self.approve_btn.clicked.connect(self.approve_selected)
-        action_layout.addWidget(self.approve_btn)
-
-        self.layout.addLayout(action_layout)
+        actions = QHBoxLayout()
+        self.add_btn = QPushButton('Apply Leave'); self.add_btn.clicked.connect(self.open_add); actions.addWidget(self.add_btn)
+        actions.addItem(QSpacerItem(20,20,QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Minimum))
+        self.edit_btn = QPushButton('Edit'); self.edit_btn.clicked.connect(self.edit_selected); actions.addWidget(self.edit_btn)
+        self.delete_btn = QPushButton('Delete'); self.delete_btn.clicked.connect(self.delete_selected); actions.addWidget(self.delete_btn)
+        self.approve_btn = QPushButton('Approve'); self.approve_btn.clicked.connect(self.approve_selected); actions.addWidget(self.approve_btn)
+        self.layout.addLayout(actions)
         self.setLayout(self.layout)
 
+    def build_model(self):
+        self.model = QStandardItemModel()
+        self.model.setHorizontalHeaderLabels(self.HEADERS)
+        self.view.setModel(self.model)
+        self.view.setSortingEnabled(True)
+        self.model.itemChanged.connect(self.on_item_changed)
+
     def load_prefs(self):
-        # load stored prefs for this user and apply to controls
-        user_prefs = self.prefs.get(self.user['username'], {})
-        if not user_prefs:
-            return
-        self.search.setText(user_prefs.get('search',''))
-        self.status_filter.setCurrentText(user_prefs.get('status','All'))
-        self.type_filter.setCurrentText(user_prefs.get('type','All'))
-        self.sort_by.setCurrentText(user_prefs.get('sort','Start date ↑'))
-        use_date = user_prefs.get('use_date', False)
-        self.use_date_filter.setChecked(use_date)
-        sd = user_prefs.get('start_date')
-        ed = user_prefs.get('end_date')
+        userprefs = self.prefs.get(self.user['username'], {})
+        if not userprefs: return
+        self.search.setText(userprefs.get('search',''))
+        self.status_filter.setCurrentText(userprefs.get('status','All'))
+        self.type_filter.setCurrentText(userprefs.get('type','All'))
+        self.group_mode.setCurrentText(userprefs.get('group','Group by Status'))
+        self.use_date.setChecked(userprefs.get('use_date', False))
+        sd = userprefs.get('start_date'); ed = userprefs.get('end_date')
         try:
-            if sd:
-                self.start_filter.setDate(QDate.fromString(sd, 'yyyy-MM-dd'))
-            if ed:
-                self.end_filter.setDate(QDate.fromString(ed, 'yyyy-MM-dd'))
+            if sd: self.start_date.setDate(QDate.fromString(sd, 'yyyy-MM-dd'))
+            if ed: self.end_date.setDate(QDate.fromString(ed, 'yyyy-MM-dd'))
         except Exception:
             pass
 
     def save_prefs(self):
-        # save current control values for this user
-        self.prefs[self.user['username']] = {
-            'search': self.search.text().strip(),
-            'status': self.status_filter.currentText(),
-            'type': self.type_filter.currentText(),
-            'sort': self.sort_by.currentText(),
-            'use_date': bool(self.use_date_filter.isChecked()),
-            'start_date': self.start_filter.date().toString('yyyy-MM-dd'),
-            'end_date': self.end_filter.date().toString('yyyy-MM-dd')
-        }
-        save_prefs = getattr(__import__('utils'), 'save_prefs')
-        save_prefs(self.prefs)
-
-    def parse_date(self, s):
         try:
-            return datetime.datetime.strptime(s, '%Y-%m-%d').date()
-        except Exception:
-            return None
-
-    def on_filters_changed(self):
-        # Save prefs and reload table live
-        try:
-            self.save_prefs()
+            p = load_prefs()
+            p[self.user['username']] = {
+                'search': self.search.text().strip(),
+                'status': self.status_filter.currentText(),
+                'type': self.type_filter.currentText(),
+                'group': self.group_mode.currentText(),
+                'use_date': bool(self.use_date.isChecked()),
+                'start_date': self.start_date.date().toString('yyyy-MM-dd'),
+                'end_date': self.end_date.date().toString('yyyy-MM-dd'),
+            }
+            save_prefs(p)
         except Exception:
             pass
-        self.load_leaves()
 
-    def load_leaves(self):
-        self.table.setRowCount(0)
-        leaves = LeaveController.list(self.user)
+    def on_group_changed(self):
+        self.save_prefs(); self.build_model(); self.load_leaves()
 
+    def on_filters_changed(self):
+        self.save_prefs(); self.load_leaves()
+
+    def get_all_leaves(self):
+        return LC.list_for(self.user)
+
+    def filtered_leaves(self):
+        leaves = self.get_all_leaves()
         q = self.search.text().strip().lower()
         if q:
-            leaves = [l for l in leaves if q in (l.get('username','').lower() + ' ' + l.get('type','').lower() + ' ' + l.get('reason','').lower() + ' ' + (l.get('status') or '').lower() + ' ' + l.get('start_date','') + ' ' + l.get('end_date',''))]
-
-        # status filter
+            leaves = [ l for l in leaves if q in ' '.join([str(l.get(k,'')).lower() for k in ['username','type','reason','status','start_date','end_date']]) ]
         status = self.status_filter.currentText()
         if status != 'All':
             leaves = [l for l in leaves if (l.get('status') or '').lower() == status.lower()]
-
-        # type filter
         t = self.type_filter.currentText()
         if t != 'All':
             if t == 'Others':
                 leaves = [l for l in leaves if l.get('type','').lower() not in ('vacation','sick')]
             else:
-                leaves = [l for l in leaves if l.get('type','').lower() == t.lower()]
-
-        # date range filter
-        if self.use_date_filter.isChecked():
-            sd = self.start_filter.date().toString('yyyy-MM-dd')
-            ed = self.end_filter.date().toString('yyyy-MM-dd')
+                leaves = [l for l in leaves if (l.get('type') or '').lower() == t.lower()]
+        if self.use_date.isChecked():
             try:
-                sd_obj = datetime.datetime.strptime(sd, '%Y-%m-%d').date()
-                ed_obj = datetime.datetime.strptime(ed, '%Y-%m-%d').date()
-                leaves = [l for l in leaves if (l.get('start_date') and datetime.datetime.strptime(l.get('start_date'), '%Y-%m-%d').date() >= sd_obj and l.get('end_date') and datetime.datetime.strptime(l.get('end_date'), '%Y-%m-%d').date() <= ed_obj)]
+                sd = datetime.datetime.strptime(self.start_date.date().toString('yyyy-MM-dd'), '%Y-%m-%d').date()
+                ed = datetime.datetime.strptime(self.end_date.date().toString('yyyy-MM-dd'), '%Y-%m-%d').date()
+                def in_range(l):
+                    try:
+                        a = datetime.datetime.strptime(l.get('start_date',''), '%Y-%m-%d').date()
+                        b = datetime.datetime.strptime(l.get('end_date',''), '%Y-%m-%d').date()
+                        return a >= sd and b <= ed
+                    except Exception:
+                        return False
+                leaves = [l for l in leaves if in_range(l)]
             except Exception:
                 pass
+        return leaves
 
-        # sorting (we'll let QTableWidget do column sorting, but pre-sort for default order)
-        sort = self.sort_by.currentText()
-        reverse = False
-        keyfunc = None
-        if sort == 'Start date ↑':
-            keyfunc = lambda x: x.get('start_date') or ''
-            reverse = False
-        elif sort == 'Start date ↓':
-            keyfunc = lambda x: x.get('start_date') or ''
-            reverse = True
-        elif sort == 'End date ↑':
-            keyfunc = lambda x: x.get('end_date') or ''
-            reverse = False
-        elif sort == 'End date ↓':
-            keyfunc = lambda x: x.get('end_date') or ''
-            reverse = True
-        elif sort == 'Username A-Z':
-            keyfunc = lambda x: (x.get('username') or '').lower()
-            reverse = False
-        elif sort == 'Username Z-A':
-            keyfunc = lambda x: (x.get('username') or '').lower()
-            reverse = True
-        elif sort == 'Status A-Z':
-            keyfunc = lambda x: (x.get('status') or '').lower()
-            reverse = False
-        elif sort == 'Status Z-A':
-            keyfunc = lambda x: (x.get('status') or '').lower()
-            reverse = True
+    def load_leaves(self):
+        self.model.removeRows(0, self.model.rowCount())
+        leaves = self.filtered_leaves()
+        all_leaves = self.get_all_leaves()
+        total = len(all_leaves)
+        approved = len([l for l in all_leaves if (l.get('status') or '').lower() == 'approved'])
+        pending = len([l for l in all_leaves if (l.get('status') or '').lower() == 'pending'])
+        rejected = len([l for l in all_leaves if (l.get('status') or '').lower() == 'rejected'])
+        self.summary.setText(f"Total Requests: {total} | Approved: {approved} | Pending: {pending} | Rejected: {rejected}")
 
-        if keyfunc:
-            try:
-                leaves = sorted(leaves, key=keyfunc, reverse=reverse)
-            except Exception:
-                pass
+        mode = self.group_mode.currentText()
+        if mode == 'Group by Status':
+            groups = {}
+            for l in leaves:
+                k = l.get('status') or 'Unknown'
+                groups.setdefault(k, []).append(l)
+            for gname, items in groups.items():
+                parent_items = [QStandardItem(gname)] + [QStandardItem('') for _ in range(len(self.HEADERS)-1)]
+                self.model.appendRow(parent_items)
+                for it in items:
+                    child = self._create_row_item(it, editable=True)
+                    parent_items[0].appendRow(child)
+                idx = self.model.indexFromItem(parent_items[0])
+                if self.expanded_states.get(self.user['username'], {}).get(gname, True):
+                    self.view.expand(idx)
+        elif mode == 'Group by Username':
+            groups = {}
+            for l in leaves:
+                k = l.get('username') or 'Unknown'
+                groups.setdefault(k, []).append(l)
+            for gname, items in groups.items():
+                parent_items = [QStandardItem(gname)] + [QStandardItem('') for _ in range(len(self.HEADERS)-1)]
+                self.model.appendRow(parent_items)
+                for it in items:
+                    child = self._create_row_item(it, editable=True)
+                    parent_items[0].appendRow(child)
+                idx = self.model.indexFromItem(parent_items[0])
+                if self.expanded_states.get(self.user['username'], {}).get(gname, True):
+                    self.view.expand(idx)
+        else:
+            for it in leaves:
+                row = self._create_row_item(it, editable=True)
+                self.model.appendRow(row)
 
-        # populate table
-        for l in leaves:
-            row = self.table.rowCount()
-            self.table.insertRow(row)
-            vals = [
-                l.get('id',''),
-                l.get('username',''),
-                l.get('type',''),
-                l.get('start_date',''),
-                l.get('end_date',''),
-                l.get('status',''),
-                l.get('reason','')
-            ]
-            for col, v in enumerate(vals):
-                item = QTableWidgetItem(v if v is not None else '')
-                # align date columns center
-                if col in (3,4):
-                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter.value)
-                self.table.setItem(row, col, item)
+        for c in range(self.model.columnCount()):
+            self.view.resizeColumnToContents(c)
 
-        # allow clicking header to sort (Qt handles it), preserve default sort (we pre-sorted already)
-        self.table.resizeColumnsToContents()
+    def _create_row_item(self, record, editable=False):
+        cols = [
+            record.get('id',''),
+            record.get('username',''),
+            record.get('type',''),
+            record.get('start_date',''),
+            record.get('end_date',''),
+            record.get('status',''),
+            record.get('reason','')
+        ]
+        items = []
+        for i,v in enumerate(cols):
+            si = QStandardItem(str(v))
+            if editable and i in (2,5):
+                if i == 5 and self.user.get('role') != 'admin':
+                    si.setEditable(False)
+                else:
+                    si.setEditable(True)
+            else:
+                si.setEditable(False)
+            if i == 6 and v:
+                si.setToolTip(v)
+            if i == 0:
+                si.setData(record, Qt.ItemDataRole.UserRole)
+            items.append(si)
+        return items
 
-    def get_selected_id(self):
-        sel = self.table.selectionModel().selectedRows()
-        if not sel:
-            QMessageBox.warning(self, 'Warning', 'Select an item first')
-            return None
-        row = sel[0].row()
-        item = self.table.item(row, 0)
-        return item.text() if item else None
+    def get_selected_record(self):
+        sel = self.view.selectionModel().selectedRows()
+        if not sel: return None
+        idx = sel[0]
+        item = self.model.itemFromIndex(idx)
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if data: return data
+        row_id = item.text()
+        for r in range(self.model.rowCount()):
+            parent = self.model.item(r,0)
+            for c in range(parent.rowCount() if parent.hasChildren() else 0):
+                child = parent.child(c,0)
+                if child and child.text() == row_id:
+                    return child.data(Qt.ItemDataRole.UserRole)
+        return None
+
+    def edit_selected(self):
+        data = self.get_selected_record()
+        if not data: QMessageBox.warning(self,'Select','Select a leave (child row) to edit'); return
+        dlg = LeaveForm(self, leave_id=data.get('id'))
+        if dlg.exec(): LC.update(self.user, data.get('id'), dlg.get_data()); self.load_leaves()
 
     def open_add(self):
         dlg = LeaveForm(self)
-        if dlg.exec():
-            payload = dlg.get_data()
-            LeaveController.create(self.user, payload)
-            self.load_leaves()
-
-    def edit_selected(self):
-        rid = self.get_selected_id()
-        if not rid:
-            return
-        dlg = LeaveForm(self, leave_id=rid)
-        if dlg.exec():
-            payload = dlg.get_data()
-            LeaveController.update(self.user, rid, payload)
-            self.load_leaves()
+        if dlg.exec(): LC.create(self.user, dlg.get_data()); self.load_leaves()
 
     def delete_selected(self):
-        rid = self.get_selected_id()
-        if not rid:
-            return
-        LeaveController.delete(self.user, rid)
-        self.load_leaves()
+        data = self.get_selected_record()
+        if not data: QMessageBox.warning(self,'Select','Select a leave'); return
+        LC.delete(self.user, data.get('id')); self.load_leaves()
 
     def approve_selected(self):
-        rid = self.get_selected_id()
-        if not rid:
+        data = self.get_selected_record()
+        if not data: QMessageBox.warning(self,'Select','Select a leave'); return
+        if self.user.get('role') != 'admin': QMessageBox.warning(self,'Permission','Only admin can approve'); return
+        LC.update(self.user, data.get('id'), {'status':'Approved'}); self.load_leaves()
+
+    def on_item_changed(self, item):
+        try:
+            data = item.data(Qt.ItemDataRole.UserRole)
+            if not data: return
+            col = item.column()
+        except Exception:
             return
-        if self.user.get('role') != 'admin':
-            QMessageBox.warning(self, 'Permission', 'Only admin can approve')
+        rec = dict(data)
+        if col == 2:
+            rec['type'] = item.text()
+        elif col == 5:
+            rec['status'] = item.text()
+        else:
             return
-        LeaveController.update(self.user, rid, {'status': 'Approved'})
+        LC.update(self.user, rec.get('id'), {'type': rec.get('type'), 'status': rec.get('status')})
         self.load_leaves()
 
-    def on_logout(self):
-        # save prefs and logout
+    def copy_selected(self):
+        sel = self.view.selectionModel().selectedRows()
+        rows = []
+        for idx in sel:
+            item = self.model.itemFromIndex(idx)
+            data = item.data(Qt.ItemDataRole.UserRole)
+            if data:
+                rows.append([data.get('id',''), data.get('username',''), data.get('type',''), data.get('start_date',''), data.get('end_date',''), data.get('status',''), data.get('reason','')])
+        if not rows: QMessageBox.information(self,'Copy','No rows selected'); return
+        txt = '\n'.join([','.join(['"{}"'.format(str(x).replace('"','""')) for x in r]) for r in rows])
+        clipboard = self.view.window().clipboard(); clipboard.setText(txt); QMessageBox.information(self,'Copied',f'Copied {len(rows)} rows to clipboard')
+
+    def export_all(self):
+        all_leaves = LC.list_for(self.user) if self.user.get('role') == 'admin' else LC.list_for(self.user)
+        path, _ = QFileDialog.getSaveFileName(self, 'Export CSV', os.path.expanduser('~/leaves_export.csv'), 'CSV Files (*.csv)')
+        if not path: return
         try:
-            self.save_prefs()
-        except Exception:
-            pass
-        self.app_controller.logout()
+            with open(path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f); writer.writerow(self.HEADERS)
+                for l in all_leaves: writer.writerow([l.get('id',''), l.get('username',''), l.get('type',''), l.get('start_date',''), l.get('end_date',''), l.get('status',''), l.get('reason','')])
+            QMessageBox.information(self,'Exported',f'Exported {len(all_leaves)} rows to {path}')
+        except Exception as e: QMessageBox.critical(self,'Error',f'Export failed: {e}')
+
+    def on_expanded(self, index):
+        item = self.model.itemFromIndex(index); 
+        if not item: return
+        key = item.text(); user = self.user['username']; self.expanded_states.setdefault(user, {})[key] = True; self.prefs['expanded'] = self.expanded_states; save_prefs(self.prefs)
+
+    def on_collapsed(self, index):
+        item = self.model.itemFromIndex(index); 
+        if not item: return
+        key = item.text(); user = self.user['username']; self.expanded_states.setdefault(user, {})[key] = False; self.prefs['expanded'] = self.expanded_states; save_prefs(self.prefs)
+
+    def on_logout(self):
+        self.prefs['expanded'] = self.expanded_states; save_prefs(self.prefs); self.app_controller.logout()
