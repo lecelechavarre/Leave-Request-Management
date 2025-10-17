@@ -3,8 +3,7 @@ from controllers import auth_controller as AC
 from views.register_window import RegisterWindow
 class LoginWindow(QWidget):
     def __init__(self, app_controller):
-        super().__init__(); self.app_controller = app_controller
-        self.setWindowTitle('Login - Leave Manager'); self.setFixedSize(420,260); self.setup_ui()
+        super().__init__(); self.app_controller = app_controller; self.setWindowTitle('Login'); self.setFixedSize(420,260); self.setup_ui()
     def setup_ui(self):
         layout = QVBoxLayout(); title = QLabel('Leave Request Manager'); title.setProperty('heading', True); layout.addWidget(title)
         layout.addWidget(QLabel('Username')); self.username = QLineEdit(); layout.addWidget(self.username)
