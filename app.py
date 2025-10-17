@@ -10,16 +10,13 @@ class AppController:
     def login_success(self, user):
         self.user = user
         self.dashboard = DashboardWindow(self, user)
-        try:
-            self.login_window.close()
-        except Exception:
-            pass
+        try: self.login_window.close()
+        except Exception: pass
         self.dashboard.show()
     def logout(self):
         try:
             if self.dashboard: self.dashboard.close()
-        except Exception:
-            pass
+        except Exception: pass
         self.user = None
         self.login_window = LoginWindow(self)
         self.login_window.show()
