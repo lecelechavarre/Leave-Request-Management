@@ -3,20 +3,9 @@ import datetime
 class LeaveFilterProxy(QSortFilterProxyModel):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.search = ''
-        self.status = 'All'
-        self.type = 'All'
-        self.use_date = False
-        self.start_date = None
-        self.end_date = None
+        self.search = ''; self.status = 'All'; self.type = 'All'; self.use_date = False; self.start_date = None; self.end_date = None
     def set_filters(self, search='', status='All', type_='All', use_date=False, start_date=None, end_date=None):
-        self.search = (search or '').lower().strip()
-        self.status = status or 'All'
-        self.type = type_ or 'All'
-        self.use_date = bool(use_date)
-        self.start_date = start_date
-        self.end_date = end_date
-        self.invalidateFilter()
+        self.search = (search or '').lower().strip(); self.status = status or 'All'; self.type = type_ or 'All'; self.use_date = bool(use_date); self.start_date = start_date; self.end_date = end_date; self.invalidateFilter()
     def filterAcceptsRow(self, source_row, source_parent):
         model = self.sourceModel()
         if model is None: return True
