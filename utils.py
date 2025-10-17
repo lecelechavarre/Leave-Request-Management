@@ -1,10 +1,11 @@
 import json, os
 PREFS_PATH = os.path.join(os.path.dirname(__file__), 'data', 'preferences.json')
-from passlib.hash import bcrypt
-def hash_password(pw): return bcrypt.hash(pw)
-def verify_password(pw, hashed): 
+from passlib.hash import pbkdf2_sha256
+def hash_password(pw: str) -> str:
+    return pbkdf2_sha256.hash(pw)
+def verify_password(pw: str, hashed: str) -> bool:
     try:
-        return bcrypt.verify(pw, hashed)
+        return pbkdf2_sha256.verify(pw, hashed)
     except Exception:
         return False
 def load_prefs():
