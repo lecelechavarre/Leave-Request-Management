@@ -1,0 +1,2 @@
+QWidget { font-family: 'Segoe UI', Roboto, Arial; }
+QLabel[heading="true"] { font-weight:600; font-size:16px; }
