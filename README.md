@@ -19,7 +19,7 @@ How to run
 3. Activate venv and install:
    ```
    pip install -r requirements.txt
-   ``
+   ```
 5. Run:
    ```
    python main.py
