@@ -1,4 +1,4 @@
-Leave Request Manager v10
+Leave Request Manager
 =========================
 
 This release implements:
@@ -13,11 +13,17 @@ This release implements:
 
 How to run
 1. Create venv:
+   ```
    python -m venv .venv
-2. Activate venv and install:
+   ```
+3. Activate venv and install:
+   ```
    pip install -r requirements.txt
-3. Run:
+   ``
+5. Run:
+   ```
    python main.py
+   ```
 
 Default users created on first run:
 - admin / admin (role=admin)
