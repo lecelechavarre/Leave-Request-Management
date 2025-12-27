@@ -2,7 +2,7 @@ Leave Request Manager
 =========================
 
 This release implements:
-- SQLAlchemy ORM (models + DB file: data/leave_manager.db)
+- SQLAlchemy ORM (models + DB file: data/leave_manager.db) 
 - Alembic migration stubs (alembic/*) to support future migrations
 - QAbstractItemModel-backed table model (scales better than QStandardItemModel)
 - QSortFilterProxyModel for searching/filtering/sorting
