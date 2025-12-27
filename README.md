@@ -1,6 +1,6 @@
 Leave Request Manager
 =========================
- 
+  
 This release implements:
 - SQLAlchemy ORM (models + DB file: data/leave_manager.db) 
 - Alembic migration stubs (alembic/*) to support future migrations
